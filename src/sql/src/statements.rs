@@ -300,6 +300,7 @@ pub fn sql_data_type_to_concrete_data_type(data_type: &SqlDataType) -> Result<Co
         SqlDataType::Double => Ok(ConcreteDataType::float64_datatype()),
         SqlDataType::Boolean => Ok(ConcreteDataType::boolean_datatype()),
         SqlDataType::Date => Ok(ConcreteDataType::date_datatype()),
+        SqlDataType::Binary(_) => Ok(ConcreteDataType::binary_datatype()),
         SqlDataType::Custom(obj_name) => match &obj_name.0[..] {
             [type_name] => {
                 if type_name
@@ -379,6 +380,10 @@ mod tests {
         check_type(
             SqlDataType::Timestamp(TimezoneInfo::None),
             ConcreteDataType::timestamp_millisecond_datatype(),
+        );
+        check_type(
+            SqlDataType::Binary(None),
+            ConcreteDataType::binary_datatype(),
         );
     }
 
