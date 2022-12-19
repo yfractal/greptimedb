@@ -24,6 +24,7 @@ pub mod statement;
 use std::str::FromStr;
 
 use api::helper::ColumnDataTypeWrapper;
+use common_base::bytes::Bytes;
 use common_catalog::consts::{DEFAULT_CATALOG_NAME, DEFAULT_SCHEMA_NAME};
 use common_time::Timestamp;
 use datatypes::data_type::DataType;
@@ -71,6 +72,26 @@ pub fn table_idents_to_full_name(obj_name: &ObjectName) -> Result<(String, Strin
         }
         .fail(),
     }
+}
+
+fn parse_hex_string_to_value(s: String) -> Result<Value> {
+    if s.len() % 2 != 0 {
+        ParseSqlValueSnafu {
+            msg: format!("Invalid hex: odd length {}", s),
+        }
+        .fail()?
+    }
+
+    for c in s.chars() {
+        if !matches!(c, '0'..='9' | 'A'..='F' | 'a'..='f') {
+            ParseSqlValueSnafu {
+                msg: format!("Invalid hex: invalid char {}", c),
+            }
+            .fail()?
+        }
+    }
+
+    Ok(Value::Binary(Bytes::from(s.to_owned().into_bytes())))
 }
 
 fn parse_string_to_value(
@@ -201,6 +222,7 @@ pub fn sql_value_to_value(
         SqlValue::DoubleQuotedString(s) | SqlValue::SingleQuotedString(s) => {
             parse_string_to_value(column_name, s.to_owned(), data_type)?
         }
+        SqlValue::HexStringLiteral(s) => parse_hex_string_to_value(s.to_owned())?,
         _ => todo!("Other sql value"),
     })
 }
@@ -435,6 +457,20 @@ mod tests {
             "v is {:?}",
             v
         );
+
+        let sql_val = SqlValue::HexStringLiteral("9AF0".to_string());
+        let v = sql_value_to_value("a", &ConcreteDataType::binary_datatype(), &sql_val).unwrap();
+        assert_eq!(Value::Binary(Bytes::from(b"9AF0".as_slice())), v);
+
+        let sql_val = SqlValue::HexStringLiteral("9AF".to_string());
+        let v = sql_value_to_value("a", &ConcreteDataType::binary_datatype(), &sql_val);
+        assert!(v.is_err());
+        assert!(format!("{:?}", v).contains("Invalid hex"), "v is {:?}", v);
+
+        let sql_val = SqlValue::HexStringLiteral("AG".to_string());
+        let v = sql_value_to_value("a", &ConcreteDataType::binary_datatype(), &sql_val);
+        assert!(v.is_err());
+        assert!(format!("{:?}", v).contains("Invalid hex"), "v is {:?}", v);
     }
 
     #[test]
